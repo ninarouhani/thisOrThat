@@ -7,12 +7,6 @@ sigmoid = lambda x: 1. / (1. + np.exp(-x))
 # FAKE DATA
 def gen_data(N_PERSON, N_PROD, D_PROD):
 
-    # N_PROD = 101
-    # D_PROD = 13
-
-    # N_PERSON = 17
-
-
     prod_vecs = rng.randn(N_PROD, D_PROD)
 
     user_prefs = [rng.randn(1, D_PROD) for _ in xrange(N_PERSON)]
