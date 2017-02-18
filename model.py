@@ -21,7 +21,6 @@ def ph(shape, dtype=tf.float32):
 
 with tf.name_scope('product') as scope:
     prod_embeddings = tf.Variable(data['prod_vecs'].astype(np.float32))  # learned codes for each product
-    prod_embedding2 = tf.Variable(tf.random_normal([N_PROD, 333]))  # learned codes for each product
 
 # placeholders are network inputs
 with tf.name_scope('user') as scope:
@@ -34,7 +33,8 @@ with tf.name_scope('user') as scope:
 # look up products
 user_prods = tf.nn.embedding_lookup(prod_embeddings, i_user_swiped)  # get the products the person responded to
 user_weights = tf.nn.embedding_lookup(user_weight_embeddings, i_user)  # get the products the person responded to
-hat_match_logit = tf.matmul(user_prods, tf.transpose(user_weights))  # guess about if they like or not
+
+hat_match_logit = tf.matmul(user_prods, tf.reshape(user_weights, [D_PERSON_STYLE, 1]))  # guess about if they like or not
 
 # get total regression loss
 match_loss_indiv = tf.nn.sigmoid_cross_entropy_with_logits(
@@ -67,17 +67,39 @@ def product_updater(product_opt, product_gvs):
     return product_update
 
 
-user_updates, product_gvs = [], []
+user_updaters, product_gvs = [], []
 for ii in xrange(N_PERSON):
     uu, pgv = user_updater(tf.train.AdamOptimizer(LRATE))
-    user_updates.append(uu)
-    # product_gvs += pgv
+    user_updaters.append(uu)
     product_gvs.append(pgv)
 
-# user_updates, product_gvs = [user_updater(tf.train.AdamOptimizer(LRATE)) for _ in xrange(N_PERSON)]
 product_opt = tf.train.AdamOptimizer(LRATE)
 product_updater = product_updater(product_opt, product_gvs)
 
 
-# with tf.Session() as sess:
+def prep_fd(i_users0):
+    # i_user_swiped0 = [data['user_i_prod_swiped'][i_user0] for i_user0 in i_users0]
+    i_user_swiped0 = data['user_i_prod_swiped'][i_users0]
+    # user_matches0 = [data['user_match'][i_user0] for i_user0 in i_users0]
+    user_matches0 = data['user_match'][i_users0]
+    return {i_user: i_users0,
+            i_user_swiped: i_user_swiped0,
+            user_match: user_matches0}
 
+
+BATCH_SIZE = 1
+N_UPDATE = int(1e4)
+with tf.Session() as sess:
+    sess.run(tf.initialize_all_variables())
+    for i_step in xrange(N_UPDATE):
+        # TEST
+        if i_step % 100 == 0:
+            print 'step %d' % (i_step)
+            l0 = 0.
+            for i_user0 in np.arange(N_PERSON):
+                fd = prep_fd(i_user0)
+                l0 += sess.run(match_loss, feed_dict=fd)
+            print l0
+        i_users0 = rng.choice(N_PERSON, BATCH_SIZE, replace=False)[0]
+        fd = prep_fd(i_users0)
+        sess.run(user_updaters + [product_updater], feed_dict=fd)
